@@ -4,6 +4,9 @@
 
 const request = require('supertest');
 const mysql = require('mysql2/promise');
+const puppeteer = require('puppeteer');
+const nock = require('nock');
+const useNock = require('nock-puppeteer');
 
 const env = process.env.NODE_ENV || 'test';
 const config = require(__dirname + '/../_cloned-app/server/config/config.json')[env];
@@ -16,7 +19,7 @@ const password = '123456';
 
 let token;
 
-const projectName = '1.Tickets manager backend';
+const projectName = 'backend testing';
 describe(projectName, () => {
   beforeAll(async () => {
     connection = await mysql.createConnection({
@@ -79,4 +82,94 @@ describe(projectName, () => {
       tokenOtherUser = otherUserLoginBody.token;
     });
   })
+})
+
+let page;
+let browser;
+
+jest.setTimeout(30000);
+const projectName = 'client testing';
+describe(projectName, () => {
+  beforeAll(async () => {
+    browser = await puppeteer.launch();
+    page = await browser.newPage();
+    useNock(page, ['http://localhost:3000/api']);
+  });
+  afterAll(async () => {
+    await browser.close();
+  });
+
+  const mockUser = {
+    username: 'myfakeusername',
+    password: 'myfakepass',
+    picture: 'https://i.picsum.photos/id/523/536/354.jpg?hmac=OaAEhfqLAFNi0-3hVrDaBqXIqz4JvfbXa38gNi6EN7c',
+  };
+
+  describe('Register Page', () => {
+    test('Call api/register after submit register form', async () => {
+      await page.goto('http://localhost:3000/register');
+      const registerMock = await nock('http://localhost:3000/', { allowUnmocked: true })
+        .post('/api/users', ({ username, password, picture }) => username === mockUser.username
+          && password === mockUser.password && picture === mockUser.picture)
+        .reply(200, { status: 'ok' });
+      await page.type('#username', mockUser.username);
+      await page.type('#password', mockUser.password);
+      await page.type('#picture', mockUser.picture);
+      await page.click('#submit');
+      expect(registerMock.isDone()).toBe(true)
+      await (new Promise((resolve) => setTimeout(resolve, 1500)));
+      const elements = await page.$$('#errorMessage');
+      expect(elements.length).toBe(0);
+    })
+    test('Show error message when the user is already exist or when other issue', async () => {
+      await page.goto('http://localhost:3000/register');
+      const registerMock = await nock('http://localhost:3000/', { allowUnmocked: true })
+        .post('/api/users', ({ username, password, picture }) => username === mockUser.username
+          && password === mockUser.password && picture === mockUser.picture)
+        .reply(500, { status: 'ok' });
+      await page.type('#username', mockUser.username);
+      await page.type('#password', mockUser.password);
+      await page.type('#picture', mockUser.picture);
+      await page.click('#submit');
+      expect(registerMock.isDone()).toBe(true)
+      await (new Promise((resolve) => setTimeout(resolve, 1500)));
+      const elements = await page.$$('#errorMessage');
+      expect(elements.length).toBe(1);
+    })
+  })
+  describe('Login page', () => {
+    test('If login fail show error message', async () => {
+      const loginMock = await nock('http://localhost:3000/', { allowUnmocked: true })
+        .post('/api/login', ({ username, password }) => username === mockUser.username
+          && password === mockUser.password)
+        .reply(500, { status: 'ok' });
+      await page.goto('http://localhost:3000/');
+      await page.type('#username', mockUser.username);
+      await page.type('#password', mockUser.password);
+      await page.click('#login');
+      await (new Promise((resolve) => setTimeout(resolve, 1500)));
+      const elements = await page.$$('#errorMessage');
+      expect(elements.length).toBe(1);
+      expect(loginMock.isDone()).toBe(true)
+    });
+    test('Can login - will call server with post api/login', async () => {
+      const loginMock = await nock('http://localhost:3000/', { allowUnmocked: true })
+        .post('/api/login', ({ username, password }) => username === mockUser.username
+          && password === mockUser.password)
+        .reply(200, { token: 'sometoken' });
+      await page.goto('http://localhost:3000/');
+      await page.type('#username', mockUser.username);
+      await page.type('#password', mockUser.password);
+      let currentUrl = await page.url();
+      // expect redirect from / to /login for user how not logged in
+      expect(currentUrl).toBe('http://localhost:3000/login')
+      await page.click('#login');
+      await (new Promise((resolve) => setTimeout(resolve, 1500)));
+      const elements = await page.$$('#errorMessage');
+      expect(elements.length).toBe(0);
+      expect(loginMock.isDone()).toBe(true)
+      currentUrl = await page.url();
+      expect(currentUrl).toBe('http://localhost:3000/')
+    });
+  });
 })
