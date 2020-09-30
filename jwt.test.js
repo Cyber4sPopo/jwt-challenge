@@ -88,8 +88,8 @@ let page;
 let browser;
 
 jest.setTimeout(30000);
-const projectName = 'client testing';
-describe(projectName, () => {
+const projectNameClient = 'client testing';
+describe(projectNameClient, () => {
   beforeAll(async () => {
     browser = await puppeteer.launch();
     page = await browser.newPage();
