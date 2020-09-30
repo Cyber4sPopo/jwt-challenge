@@ -6,10 +6,10 @@ const request = require('supertest');
 const mysql = require('mysql2/promise');
 
 const env = process.env.NODE_ENV || 'test';
-const config = require(__dirname + '/_cloned-app/server/config/config.json')[env];
+const config = require(__dirname + '/../_cloned-app/server/config/config.json')[env];
 let connection;
  
-const app = require('./_cloned-app/server/app');
+const app = require('../_cloned-app/server/app');
 const username = 'guy';
 const otherUsername = 'guy55';
 const password = '123456';
